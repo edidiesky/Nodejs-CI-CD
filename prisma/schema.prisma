@@ -1,0 +1,168 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+enum ReservationStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+}
+
+enum PaymentStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+}
+
+enum DeliveryStatus {
+  PENDING
+  DELIVERED
+  TRANSIT
+}
+
+enum RoleStatus {
+  ADMIN
+  USER
+  SELLER
+}
+
+// @description  User model
+model User {
+  id                          String          @id @default(auto()) @map("_id") @db.ObjectId
+  name                        String
+  username                    String
+  email                       String?         @unique
+  emailVerified               Boolean?
+  image                       String?
+  country                     String?
+  city                        String?
+  verifiedToken               String?
+  resetPasswordToken          String?
+  role                        RoleStatus      @default(USER)
+  hashedPassword              String?
+  createdAt                   DateTime        @default(now())
+  verifiedTokenExpiresAt      DateTime?
+  resetPasswordTokenExpiresAt DateTime?
+  updatedAt                   DateTime        @updatedAt
+  conversationIds             String[]        @db.ObjectId
+  conversations               Conversations[] @relation(fields: [conversationIds], references: [id])
+  menu                        Menu[]
+  cart                        Cart[]
+  payment                     Payment[]       @relation("SellerPayments")
+  paymentsMade                Payment[]       @relation("UserPayments")
+  reviews                     Review[]        @relation("SellerReviews")
+  reviewsMade                 Review[]        @relation("UserReview")
+  notifications               Notifications[]
+  Message                     Message[]       @relation("senderMessage")
+  ReceiverMessage             Message[]       @relation("ReceiverMessage")
+}
+
+model Menu {
+  id                String   @id @default(auto()) @map("_id") @db.ObjectId
+  title             String
+  description       String
+  price             Int
+  category          String?
+  image             String
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  availabilityCount Int
+  servedCount       Int?     @default(0)
+  userid            String   @db.ObjectId
+  user              User?    @relation(fields: [userid], references: [id], onDelete: Cascade)
+  cart              Cart[]
+  Review            Review[]
+
+  @@index([userid, servedCount])
+}
+
+model Payment {
+  id                  String         @id @default(auto()) @map("_id") @db.ObjectId
+  amount              Int?
+  salesamount         Int?
+  currency            String
+  paymentGroupId      String?
+  ShippingInformation Json?
+  status              PaymentStatus  @default(PENDING)
+  deliverystatus      DeliveryStatus @default(PENDING)
+  // DeliveryStatus
+  userid              String?        @db.ObjectId // Customer ID
+  sellerId            String?        @db.ObjectId // Seller ID
+  user                User?          @relation("UserPayments", fields: [userid], references: [id], onDelete: SetNull)
+  seller              User?          @relation("SellerPayments", fields: [sellerId], references: [id], onDelete: SetNull)
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+  cartItems           Json?
+
+  @@index([createdAt])
+  @@index([status])
+  @@index([userid])
+  @@index([sellerId])
+}
+
+model Review {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  review      Int
+  description String
+  menuid      String   @db.ObjectId
+  menu        Menu?    @relation(fields: [menuid], references: [id], onDelete: Cascade)
+  userid      String?  @db.ObjectId // Customer ID
+  sellerId    String?  @db.ObjectId // Seller ID
+  user        User?    @relation("UserReview", fields: [userid], references: [id], onDelete: SetNull)
+  seller      User?    @relation("SellerReviews", fields: [sellerId], references: [id], onDelete: SetNull)
+  createdAt   DateTime @default(now())
+}
+
+model Cart {
+  id         String            @id @default(auto()) @map("_id") @db.ObjectId
+  totalPrice Int?
+  totalCount Int?
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
+  menuid     String            @db.ObjectId
+  userid     String?           @db.ObjectId
+  status     ReservationStatus @default(PENDING)
+  menu       Menu?             @relation(fields: [menuid], references: [id], onDelete: Cascade)
+  user       User?             @relation(fields: [userid], references: [id], onDelete: SetNull)
+}
+
+model Notifications {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  action    String?
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  userid String @db.ObjectId
+  user   User?  @relation(fields: [userid], references: [id], onDelete: Cascade)
+}
+
+model Conversations {
+  id          String    @id @default(auto()) @map("_id") @db.ObjectId
+  users       User[]    @relation(fields: [userIDs], references: [id])
+  userIDs     String[]  @db.ObjectId
+  createdAt   DateTime  @default(now())
+  seenBy      String[]  @db.ObjectId
+  messages    Message[]
+  lastMessage String?
+}
+
+model Message {
+  id             String         @id @default(auto()) @map("_id") @db.ObjectId
+  text           String
+  senderid       String?        @db.ObjectId // Customer ID
+  receiverid     String?        @db.ObjectId // Seller ID
+  sender         User?          @relation("senderMessage", fields: [senderid], references: [id], onDelete: SetNull)
+  receiver       User?          @relation("ReceiverMessage", fields: [receiverid], references: [id], onDelete: SetNull)
+  conversationId String         @db.ObjectId
+  createdAt      DateTime       @default(now())
+  Conversations  Conversations? @relation(fields: [conversationId], references: [id])
+}
